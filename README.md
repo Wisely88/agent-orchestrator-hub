@@ -1,118 +1,63 @@
-# Gemini Multi-Agent Orchestrator Hub
-> 基于 Gemini 架构中枢的跨端多 Agent 协同研发工作台 (集成 OpenClaw, Muse, Claude, Codex 与 Antigravity 沙盒)
+# Agent Orchestrator Hub
 
-[![Python 3.10+](https://img.shields.io/badge/Python-3.10%2B-blue.svg)](https://www.python.org/)
-[![Cloudflare Tunnel](https://img.shields.io/badge/Tunnel-Cloudflare-orange.svg)](https://developers.cloudflare.com/cloudflare-one/connections/connect-apps)
-[![PWA Ready](https://img.shields.io/badge/PWA-Ready-green.svg)](https://web.dev/progressive-web-apps/)
-[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+一个以真实执行状态为准的多 Agent 工作台。当前仓库只实现了有限的 API 适配器；界面中的角色名称不代表相应服务已经接通。
 
----
+## 当前真实能力
 
-## 🌟 项目简介
+- Gemini：在配置 `GEMINI_API_KEY` 且 API 调用成功时，可拆解需求。
+- Claude：在配置 `ANTHROPIC_API_KEY` 后，可通过 Anthropic Messages API 生成任务产物。
+- Codex、OpenClaw、Muse：目前没有可验证的执行适配器。被指派到这些角色的任务会明确显示“未配置”，不会伪装成已执行。
+- 生成的产物会写入 `outputs/`，但服务**不会执行模型生成的代码，也不会声称测试通过**。
+- 模型拆解失败时，不创建占位任务或虚假 Agent 回执。
 
-**Gemini Multi-Agent Orchestrator Hub** 是一个支持电脑端与手机端随时随地（家中/外网 4G/5G）访问的**通用多 Agent 协同研发工作台**。
+## 安全边界
 
-通过**星型主管路由架构 (Hub-and-Spoke Topology)** 与**上下文切片引擎**，实现相比自由群聊模式 **72% 的 Token 节省** 与 **94% 的上下文纯净度**，并且**支持真正调用大模型编写工程代码落盘并执行沙盒验证**。
+- 服务默认只监听 `127.0.0.1:8765`。
+- 自动 Cloudflare 临时公网隧道已移除；不要将本服务直接暴露到公网。
+- 当前版本没有完整的用户认证/授权层，因此不支持局域网或公网绑定。远程多设备访问应在实现认证、授权、审计日志与隔离执行环境后再启用。
+- 前端动态内容会进行 HTML 转义；产物路径限制在 `outputs/` 目录内。
+- 模型生成代码视为不可信内容，当前仅保存，不自动运行。
 
-```
-                  ┌───────────────────┐
-                  │    人类用户 / PM   │
-                  └─────────┬─────────┘
-                            │ (切片隔离/过滤)
-                            ▼
-              ┌───────────────────────────┐
-              │   Gemini 架构 [调度中枢]    │
-              └──────┬──────┬──────┬──────┘
-                     │      │      │      │
-       ┌─────────────┘      │      │      └─────────────┐
-       ▼                    ▼      ▼                    ▼
-┌──────────────┐     ┌───────────┐ ┌───────────┐ ┌──────────────┐
-│   OpenClaw   │     │   Muse    │ │  Claude   │ │    Codex     │
-│ [数据感知底座]│     │[视觉/交互] │ │[核心研发] │ │[单测/沙盒门禁]│
-└──────────────┘     └───────────┘ └───────────┘ └──────────────┘
-```
+## 安装与启动
 
----
-
-## 🚀 核心特性
-
-1. **视觉直观化工作规划看板 (Task Board)**
-   - 支持自由排布、增删任务卡片。
-   - 具备 **Gemini 智能任务解构与角色分配** 能力。
-2. **多 Agent 实时会话与开工回执 (Chat Stream)**
-   - 全面接通 Google Gemini 2.5 Flash 真实大模型。
-   - 针对具体需求给出深度架构拆解，各 Agent 提供第一人称独立技术方案。
-3. **真实代码落盘与执行引擎 (Real Code Execution)**
-   - 告别“仅在嘴上汇报”，点击 **【▶ 真正写代码落盘】** 或 **【⚡ 编写全部代码】**，后台真正生成可执行代码并写入 `outputs/` 目录。
-   - 自动在沙盒中执行单元测试，提供真实回执。
-4. **跨端自适应与双通道访问**
-   - **📱 移动端沉浸体验**：针对手机竖屏优化，支持 **PWA 一键添加到桌面**（全屏无地址栏独立 App 体验）。
-   - **🏠 家中局域网直连通道**：手机连家中 WiFi 打开 `http://<Local_IP>:8765` 永不掉线。
-   - **🌐 外网安全隧道通道**：集成 Cloudflare Tunnel，外出 4G/5G 随时随地安全直连。
-
----
-
-## 🛠️ 快速启动指南
-
-### 1. 克隆与依赖安装
+需要 Python 3.10+。在仓库根目录执行：
 
 ```bash
-git clone https://github.com/Wisely88/agent-orchestrator-hub.git
-cd agent-orchestrator-hub
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-```
-
-### 2. 配置环境变量
-
-复制 `.env.example` 为 `.env` 并填入您的 Gemini API Key：
-
-```bash
 cp .env.example .env
-# 编辑 .env，填入 GEMINI_API_KEY=your_key
+# 编辑 .env，只填写你确实拥有的 API key
+python server.py 8765
 ```
 
-### 3. 一键启动服务与穿透通道
+浏览器访问 `http://127.0.0.1:8765`。
+
+可配置环境变量：
+
+```dotenv
+GEMINI_API_KEY=
+GEMINI_MODEL=gemini-2.5-flash
+ANTHROPIC_API_KEY=
+ANTHROPIC_MODEL=claude-sonnet-4-5
+```
+
+不要将真实密钥提交到 GitHub。若某个模型/接口不支持配置的模型 ID，服务会返回实际 API 错误，而不会伪造成功。
+
+## 测试
 
 ```bash
-./start_hub.sh
+python -m unittest discover -s tests -v
 ```
 
-启动完成后终端将输出：
-- 本地访问入口：`http://localhost:8765`
-- 局域网直连入口：`http://<Your_Local_IP>:8765`
-- 公网专属安全域名：`https://xxxx.trycloudflare.com`
-- 手机端一键扫码二维码图片链接
+测试覆盖默认数据、持久化、未配置 Agent 失败关闭，以及产物写入但不执行代码的行为。
 
-### 4. 停止服务
+## 仍未实现
 
-```bash
-./stop_hub.sh
-```
+- Codex CLI 的独立工作区执行、审批与 diff 审查
+- OpenClaw Gateway 的受控适配器
+- Muse 的具体产品/接口核验与适配器
+- 多用户身份认证、权限、任务审计和远程访问
+- 独立测试执行沙盒、资源配额、取消任务与返工流程
 
----
-
-## 📂 项目结构
-
-```text
-agent-orchestrator-hub/
-├── static/
-│   ├── index.html         # 电脑/手机全端自适应响应式 PWA 前端
-│   ├── manifest.json      # 移动端桌面应用 PWA 配置
-│   └── apps/              # 落地应用展示专区
-├── data/
-│   └── tasks.json         # 任务与协同状态持久化数据源
-├── outputs/               # Agent 真实代码编写与落盘生成目录
-├── tests/
-│   └── test_server.py     # 单元测试套件
-├── server.py              # 轻量级 RESTful API 服务与真实 AI 执行引擎
-├── start_hub.sh           # 一键启动与 Cloudflare 隧道穿透脚本
-├── stop_hub.sh            # 一键停止脚本
-├── requirements.txt       # 核心 Python 依赖
-└── README.md
-```
-
----
-
-## 📄 License
-
-本项目采用 [MIT License](LICENSE) 开源许可协议。
+在上述能力完成并通过测试前，不应将本项目描述为已实现完整的多 Agent 自主协作平台。
