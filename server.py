@@ -1,10 +1,8 @@
 #!/usr/bin/env python3
 """
-Gemini Multi-Agent Orchestrator Remote Hub Server
-真正的多 Agent 协同研发中枢：
-1. 彻底纠偏：通用多 Agent 工作台，不绑定任何特定测试玩具项目；
-2. 真正调用开发：支持点击执行，调用真实大模型生成真实工程代码、自动化单测，并在沙盒中实际运行，产物实打实落盘！
-3. 跨端双通道：支持家中局域网 IP 直连 (永不掉线) 与 Cloudflare 外网安全隧道双通道。
+Agent Orchestrator Hub.
+Only configured providers may execute; generated code is saved but never run.
+The HTTP server binds to loopback until authenticated remote access is implemented.
 """
 
 import os
@@ -77,7 +75,7 @@ DEFAULT_DATA = {
             "id": "M1",
             "sender": "Gemini",
             "name": "Gemini 调度中枢",
-            "text": "👋 跨端协同中枢已就绪！您可以在此输入您的任何真实工程或开发需求。我将拆解派发给 OpenClaw、Muse、Claude、Codex，并真正调用它们编写落地代码落盘！",
+            "text": "工作台已就绪。需求拆解由已配置的 Gemini API 完成；只有接通真实适配器的 Agent 才能执行。未配置会明确报错，生成代码不会自动运行。",
             "time": "System Ready"
         }
     ]
@@ -105,11 +103,9 @@ def call_real_gemini_brain(user_prompt):
     if not genai_client:
         return None
 
-    system_instruction = f"""你是一个多 Agent 软件研发调度中枢 (Gemini)。旗下有 4 个专业协作节点：
-1. OpenClaw: 负责数据底座、外部资料采集与真实数据字典提取
-2. Muse: 负责产品需求、UI/UX原型、交互设计（遵循 Aesthetic 美学规范）
-3. Claude: 负责核心架构实现、业务逻辑、算法编写
-4. Codex: 负责自动化单测生成、边界断言与质量门禁
+    system_instruction = f"""你是需求拆解与任务规划模型，不是其他 Agent 的代言人。
+可以建议 OpenClaw、Muse、Claude、Codex 等角色，但规划不代表这些服务已连接。
+不要伪造任何 Agent 的第一人称开工回执；系统只会记录真实适配器的执行结果。
 
 人类用户发来了真实项目开发指令：
 "{user_prompt}"
@@ -125,14 +121,8 @@ def call_real_gemini_brain(user_prompt):
       "slice": "切片说明"
     }}
   ],
-  "agent_acks": [
-    {{
-      "agent": "OpenClaw/Muse/Claude/Codex",
-      "ack": "该 Agent 针对用户需求的具体第一人称开工确认，说明具体的实施方案"
-    }}
-  ]
 }}
-注意：tasks 输出 2 到 4 个最核心的任务，职责分明，不要过度碎片化！"""
+注意：tasks 输出 2 到 4 个最核心的任务，职责分明，不要过度碎片化；不要生成 agent_acks 或其他 Agent 的开工回执。"""
 
     try:
         resp = genai_client.models.generate_content(
@@ -151,44 +141,6 @@ def call_real_gemini_brain(user_prompt):
     except Exception as e:
         print(f"⚠️ [AI Brain] Gemini API 异常: {e}")
         return None
-
-def fallback_smart_dispatch(prompt_text):
-    text = prompt_text.strip()
-    return {
-        "gemini_analysis": f"已识别关于【{text[:20]}】的开发需求！已启动星型架构隔离，拆解为数据感知、UI交互、核心逻辑与单测验证四大主线。",
-        "tasks": [
-            {
-                "title": f"数据底座: 整理 {text[:10]} 所需数据",
-                "desc": f"针对 {text} 构建基础数据结构与配置字典",
-                "assignedAgent": "OpenClaw",
-                "slice": "数据字典契约 (0.5k)"
-            },
-            {
-                "title": f"交互视觉: 设计原型与交互界面",
-                "desc": f"遵循 Aesthetic 标准设计生动交互流程与原型: {text}",
-                "assignedAgent": "Muse",
-                "slice": "视觉交互契约 (0.8k)"
-            },
-            {
-                "title": f"核心实现: 业务逻辑与算法管道",
-                "desc": f"编写核心业务逻辑与数据流处理: {text}",
-                "assignedAgent": "Claude",
-                "slice": "核心逻辑契约 (1.2k)"
-            },
-            {
-                "title": f"质量门禁: 自动化单测与回归验证",
-                "desc": f"针对 {text} 编写自动化测试集保障 0 语法与逻辑错误",
-                "assignedAgent": "Codex",
-                "slice": "测试门禁契约 (0.5k)"
-            }
-        ],
-        "agent_acks": [
-            {"agent": "OpenClaw", "ack": f"正在抓取并准备与“{text[:12]}”相关的基础数据。"},
-            {"agent": "Muse", "ack": f"正针对“{text[:12]}”进行交互与视觉原型设计。"},
-            {"agent": "Claude", "ack": f"正在实现“{text[:12]}”的核心代码与业务模块。"},
-            {"agent": "Codex", "ack": f"正在为“{text[:12]}”补充自动化单测用例。"}
-        ]
-    }
 
 class AgentNotConfiguredError(RuntimeError):
     """Raised when the requested Agent has no genuine execution adapter."""
@@ -312,7 +264,7 @@ class HubRequestHandler(BaseHTTPRequestHandler):
 
         if path == "/api/data" or path == "/api/tasks":
             data = load_data()
-            data["local_ip"] = LOCAL_IP
+            data["local_ip"] = "127.0.0.1"
             self.send_json(200, data)
             return
 
@@ -557,7 +509,7 @@ class HubRequestHandler(BaseHTTPRequestHandler):
                     "id": "M" + str(len(data.get("messages", [])) + 1),
                     "sender": "Gemini",
                     "name": "Gemini 调度中枢",
-                    "text": f"🧠 【架构调度决策】\n{analysis}\n\n已切片生成 {len(created_tasks)} 个研发主线排入看板：\n" + "\n".join([f"• [{t['id']}] {t['title']} ➔ 【{t['assignedAgent']}】 ({t['slice']})" for t in created_tasks]) + "\n\n💡 提示：您可随时在看板上点击【⚡ 真正编写落地代码】触发各 Agent 实打实写入本地文件！",
+                    "text": f"🧠 【架构调度决策】\n{analysis}\n\n已切片生成 {len(created_tasks)} 个研发主线排入看板：\n" + "\n".join([f"• [{t['id']}] {t['title']} ➔ 【{t['assignedAgent']}】 ({t['slice']})" for t in created_tasks]) + "\n\n提示：执行按钮只调用已配置的真实适配器；未配置会明确失败。产物保存后不会自动执行，测试也不会被虚报为通过。",
                     "time": "刚刚"
                 }
                 data.setdefault("messages", []).append(gemini_reply)
