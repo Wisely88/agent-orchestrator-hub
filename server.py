@@ -120,7 +120,7 @@ def call_real_gemini_brain(user_prompt):
       "assignedAgent": "OpenClaw 或 Muse 或 Claude 或 Codex",
       "slice": "切片说明"
     }}
-  ],
+  ]
 }}
 注意：tasks 输出 2 到 4 个最核心的任务，职责分明，不要过度碎片化；不要生成 agent_acks 或其他 Agent 的开工回执。"""
 
