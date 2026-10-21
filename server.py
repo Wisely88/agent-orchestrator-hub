@@ -13,6 +13,8 @@ import json
 import mimetypes
 import subprocess
 import socket
+import urllib.request
+import urllib.error
 from urllib.parse import urlparse
 from http.server import ThreadingHTTPServer, BaseHTTPRequestHandler
 
@@ -37,16 +39,21 @@ if os.path.isfile(ENV_FILE):
         print(f"Error loading .env: {e}")
 
 # 读取环境变量中的配置
-GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "")
+GEMINI_API_KEY = os.environ.get("GEMINI_API_KEY", "").strip()
 GEMINI_MODEL = os.environ.get("GEMINI_MODEL", "gemini-2.5-flash")
+ANTHROPIC_API_KEY = os.environ.get("ANTHROPIC_API_KEY", "").strip()
+ANTHROPIC_MODEL = os.environ.get("ANTHROPIC_MODEL", "claude-sonnet-4-5")
 
 genai_client = None
-try:
-    from google import genai
-    genai_client = genai.Client(api_key=GEMINI_API_KEY)
-    print("✅ [AI Brain] Google Gemini API Client 初始化成功！")
-except Exception as e:
-    print(f"⚠️ [AI Brain] 未能加载 google-genai 库: {e}")
+if GEMINI_API_KEY:
+    try:
+        from google import genai
+        genai_client = genai.Client(api_key=GEMINI_API_KEY)
+        print("✅ [AI Brain] Gemini API 客户端已配置")
+    except Exception as e:
+        print(f"⚠️ [AI Brain] Gemini 客户端初始化失败: {e}")
+else:
+    print("ℹ️ [AI Brain] 未配置 GEMINI_API_KEY；需求拆解将明确失败，不会伪造任务。
 
 # 获取本机局域网 IP
 def get_local_ip():
@@ -183,79 +190,105 @@ def fallback_smart_dispatch(prompt_text):
         ]
     }
 
+class AgentNotConfiguredError(RuntimeError):
+    """Raised when the requested Agent has no genuine execution adapter."""
+
+
+def call_agent_for_code(agent, prompt):
+    """Call only a configured provider. Never impersonate an unconnected Agent."""
+    if agent == "Gemini":
+        if not genai_client:
+            raise AgentNotConfiguredError("Gemini 未配置：请设置 GEMINI_API_KEY。")
+        response = genai_client.models.generate_content(model=GEMINI_MODEL, contents=prompt)
+        content = (getattr(response, "text", None) or "").strip()
+        if not content:
+            raise RuntimeError("Gemini 返回空内容。")
+        return content, "Google Gemini API"
+
+    if agent == "Claude":
+        if not ANTHROPIC_API_KEY:
+            raise AgentNotConfiguredError("Claude 未配置：请设置 ANTHROPIC_API_KEY。")
+        payload = json.dumps({
+            "model": ANTHROPIC_MODEL,
+            "max_tokens": 8192,
+            "messages": [{"role": "user", "content": prompt}]
+        }).encode("utf-8")
+        request = urllib.request.Request(
+            "https://api.anthropic.com/v1/messages",
+            data=payload,
+            headers={
+                "content-type": "application/json",
+                "x-api-key": ANTHROPIC_API_KEY,
+                "anthropic-version": "2023-06-01"
+            },
+            method="POST"
+        )
+        try:
+            with urllib.request.urlopen(request, timeout=90) as response:
+                result = json.loads(response.read().decode("utf-8"))
+        except urllib.error.HTTPError as exc:
+            detail = exc.read().decode("utf-8", errors="replace")[:500]
+            raise RuntimeError(f"Claude API HTTP {exc.code}: {detail}") from exc
+        except (urllib.error.URLError, TimeoutError) as exc:
+            raise RuntimeError(f"Claude API 网络/超时错误：{exc}") from exc
+        blocks = result.get("content", [])
+        content = "\n".join(
+            block.get("text", "") for block in blocks
+            if isinstance(block, dict) and block.get("type") == "text"
+        ).strip()
+        if not content:
+            raise RuntimeError("Claude API 返回空内容。")
+        return content, f"Anthropic API ({ANTHROPIC_MODEL})"
+
+    configured = {
+        "Codex": "Codex CLI/执行器尚未接入；不会用其他模型冒充 Codex。",
+        "OpenClaw": "OpenClaw Gateway 尚未接入；不会伪造 OpenClaw 执行。",
+        "Muse": "Muse 的可验证执行接口尚未配置；不会伪造 Muse 执行。"
+    }
+    raise AgentNotConfiguredError(configured.get(agent, f"未知或未配置的 Agent：{agent}"))
+
+
 def execute_real_agent_task(task):
+    """Generate an artifact using the specifically assigned, configured provider.
+    Generated code is written as an artifact only and is never executed here.
     """
-    真正调用 Agent 进行代码开发落盘与测试运行！
-    根据任务的指派 Agent，真正生成落地代码文件，并执行沙盒验证。
-    """
-    agent = task.get("assignedAgent", "Claude")
-    title = task.get("title", "")
-    desc = task.get("desc", "")
-    task_id = task.get("id", "T1")
+    agent = str(task.get("assignedAgent", "")).strip()
+    title = str(task.get("title", ""))
+    desc = str(task.get("desc", ""))
+    task_id = str(task.get("id", "task"))
+    if not agent:
+        raise AgentNotConfiguredError("任务没有指派 Agent。")
+    prompt = f"""你是执行任务的工程 Agent。
+任务 ID：{task_id}
+任务名称：{title}
+任务需求：{desc}
 
-    prompt = f"""你是负责实际代码落地的工程师 Agent ({agent})。
-当前任务：[{title}]
-详细需求：{desc}
-
-请你真正写出该任务所对应的完整代码或配置产物！
-直接输出纯代码文件内容（不要用任何自然语言废话解释）。
-- 如果是 Python 代码，直接输出完整可运行的 Python 代码。
-- 如果是 HTML/JS 前端原型，直接输出完整的单文件 HTML 字符串。
-- 如果是数据 JSON，直接输出合法 JSON。"""
-
-    output_filename = f"task_{task_id}_{agent.lower()}"
-    file_content = ""
-
-    if genai_client:
-        try:
-            resp = genai_client.models.generate_content(
-                model=GEMINI_MODEL,
-                contents=prompt
-            )
-            raw = resp.text.strip()
-            # 强化清洗代码块反引号标记
-            if "```" in raw:
-                lines = raw.split("\n")
-                cleaned_lines = []
-                for line in lines:
-                    if line.strip().startswith("```"):
-                        continue
-                    cleaned_lines.append(line)
-                file_content = "\n".join(cleaned_lines).strip()
-            else:
-                file_content = raw
-
-            ext = ".py" if agent in ["Claude", "Codex"] else (".html" if agent == "Muse" else ".json")
-            output_filename += ext
-        except Exception as e:
-            file_content = f"# Generated fallback code for {title}\nprint('Task {task_id} executed successfully.')\n"
-            output_filename += ".py"
-    else:
-        ext = ".py" if agent in ["Claude", "Codex"] else (".html" if agent == "Muse" else ".json")
-        file_content = f"# Generated code for {title}\nprint('Task {task_id} completed by {agent}')\n"
-        output_filename += ext
-
-    # 实打实写入本地磁盘！
-    file_path = os.path.join(OUTPUTS_DIR, output_filename)
-    with open(file_path, "w", encoding="utf-8") as f:
-        f.write(file_content)
-
-    test_result = "代码已成功写入磁盘"
-    # 如果是 Codex 产出的 Python 测试文件，真实在沙盒中执行一次！
-    if agent == "Codex" and output_filename.endswith(".py"):
-        try:
-            res = subprocess.run([sys.executable, file_path], capture_output=True, text=True, timeout=5)
-            test_result = f"沙盒执行回执: ReturnCode={res.returncode}, Output: {res.stdout[:100]} {res.stderr[:100]}"
-        except Exception as te:
-            test_result = f"沙盒测试调用完成: {te}"
-
+只输出该任务的代码或配置文件内容，不要声称运行过测试或部署。
+不要输出密钥、凭据或无关文件内容。"""
+    content, provider = call_agent_for_code(agent, prompt)
+    extensions = {"Claude": ".py", "Codex": ".py", "Muse": ".html",
+                  "OpenClaw": ".json", "Gemini": ".txt"}
+    extension = extensions.get(agent, ".txt")
+    safe_id = "".join(ch for ch in task_id if ch.isalnum() or ch in "-_")[:40] or "task"
+    safe_agent = "".join(ch for ch in agent.lower() if ch.isalnum() or ch in "-_")[:30] or "agent"
+    output_filename = f"task_{safe_id}_{safe_agent}{extension}"
+    output_root = os.path.abspath(OUTPUTS_DIR)
+    file_path = os.path.abspath(os.path.join(output_root, output_filename))
+    if os.path.commonpath([output_root, file_path]) != output_root:
+        raise RuntimeError("非法产物路径。")
+    os.makedirs(output_root, exist_ok=True)
+    with open(file_path, "w", encoding="utf-8") as output_file:
+        output_file.write(content)
     return {
         "file_name": output_filename,
         "file_path": file_path,
         "relative_path": f"/outputs/{output_filename}",
-        "size": len(file_content),
-        "test_result": test_result
+        "size": len(content.encode("utf-8")),
+        "provider": provider,
+        "execution_result": "未执行生成的代码",
+        "test_result": "未运行测试；仅生成并保存产物"
     }
+
 
 class HubRequestHandler(BaseHTTPRequestHandler):
     def send_json(self, status_code, data):
@@ -263,17 +296,11 @@ class HubRequestHandler(BaseHTTPRequestHandler):
         self.send_response(status_code)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(payload)))
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
         self.wfile.write(payload)
 
     def do_OPTIONS(self):
         self.send_response(200)
-        self.send_header("Access-Control-Allow-Origin", "*")
-        self.send_header("Access-Control-Allow-Methods", "GET, POST, PUT, DELETE, OPTIONS, HEAD")
-        self.send_header("Access-Control-Allow-Headers", "Content-Type")
         self.end_headers()
 
     def do_HEAD(self):
@@ -296,8 +323,12 @@ class HubRequestHandler(BaseHTTPRequestHandler):
 
         # 访问生成的代码产物目录
         if path.startswith("/outputs/"):
-            rel_file = path.replace("/outputs/", "").lstrip("/")
-            file_path = os.path.join(OUTPUTS_DIR, rel_file)
+            rel_file = path[len("/outputs/"):].lstrip("/")
+            output_root = os.path.abspath(OUTPUTS_DIR)
+            file_path = os.path.abspath(os.path.join(output_root, rel_file))
+            if os.path.commonpath([output_root, file_path]) != output_root:
+                self.send_error(403, "Forbidden")
+                return
             if os.path.isfile(file_path):
                 content_type, _ = mimetypes.guess_type(file_path)
                 content_type = content_type or "text/plain; charset=utf-8"
@@ -319,7 +350,11 @@ class HubRequestHandler(BaseHTTPRequestHandler):
             file_path = os.path.join(STATIC_DIR, "index.html")
         else:
             rel_path = path.lstrip("/")
-            file_path = os.path.join(STATIC_DIR, rel_path)
+            static_root = os.path.abspath(STATIC_DIR)
+            file_path = os.path.abspath(os.path.join(static_root, rel_path))
+            if os.path.commonpath([static_root, file_path]) != static_root:
+                self.send_error(403, "Forbidden")
+                return
 
         if os.path.isfile(file_path):
             content_type, _ = mimetypes.guess_type(file_path)
@@ -371,28 +406,37 @@ class HubRequestHandler(BaseHTTPRequestHandler):
         # 核心：真正调用 Agent 落地开发代码与单测！
         if path.startswith("/api/tasks/execute/"):
             task_id = path.split("/")[-1]
-            target_task = None
-            for t in data.get("tasks", []):
-                if t.get("id") == task_id:
-                    target_task = t
-                    break
-
+            target_task = next((task for task in data.get("tasks", []) if task.get("id") == task_id), None)
             if not target_task:
-                self.send_error(404, "Task Not Found")
+                self.send_json(404, {"success": False, "error": "Task Not Found"})
                 return
-
-            # 真正执行落地代码编写
-            exec_res = execute_real_agent_task(target_task)
-            target_task["status"] = "✅ 已落盘交付"
+            target_task["status"] = "执行中"
+            target_task.pop("error", None)
+            save_data(data)
+            try:
+                exec_res = execute_real_agent_task(target_task)
+            except AgentNotConfiguredError as exc:
+                target_task["status"] = "未配置"
+                target_task["error"] = str(exc)
+                save_data(data)
+                self.send_json(409, {"success": False, "task": target_task, "error": str(exc)})
+                return
+            except Exception as exc:
+                target_task["status"] = "失败"
+                target_task["error"] = str(exc)
+                save_data(data)
+                self.send_json(502, {"success": False, "task": target_task, "error": str(exc)})
+                return
+            target_task["status"] = "✅ 已落盘；未执行代码"
             target_task["artifact"] = exec_res["relative_path"]
             target_task["file_name"] = exec_res["file_name"]
+            target_task["provider"] = exec_res["provider"]
             target_task["test_result"] = exec_res["test_result"]
-
             report_msg = {
                 "id": "M" + str(len(data.get("messages", [])) + 1),
-                "sender": target_task["assignedAgent"],
-                "name": f"{target_task['assignedAgent']} Agent",
-                "text": f"🛠️ 【落地开发交付完成】针对任务 [{target_task['id']} {target_task['title']}]：\n• 代码已实打实写入磁盘: outputs/{exec_res['file_name']} ({exec_res['size']} 字节)\n• 沙盒验证: {exec_res['test_result']}",
+                "sender": target_task.get("assignedAgent", "Agent"),
+                "name": f"{target_task.get('assignedAgent', 'Agent')}（真实 API）",
+                "text": f"产物已保存：outputs/{exec_res['file_name']}（{exec_res['size']} 字节）。调用方：{exec_res['provider']}。未执行生成代码，未运行测试。",
                 "time": "刚刚"
             }
             data.setdefault("messages", []).append(report_msg)
@@ -403,25 +447,45 @@ class HubRequestHandler(BaseHTTPRequestHandler):
         # 一键执行全部待办任务
         if path == "/api/tasks/execute_all":
             results = []
-            for t in data.get("tasks", []):
-                if "已落盘交付" not in t.get("status", ""):
-                    res = execute_real_agent_task(t)
-                    t["status"] = "✅ 已落盘交付"
-                    t["artifact"] = res["relative_path"]
-                    t["file_name"] = res["file_name"]
-                    t["test_result"] = res["test_result"]
-                    results.append(res)
-
+            failures = []
+            for task in data.get("tasks", []):
+                if "已落盘" in task.get("status", ""):
+                    continue
+                task["status"] = "执行中"
+                task.pop("error", None)
+                save_data(data)
+                try:
+                    result = execute_real_agent_task(task)
+                    task["status"] = "✅ 已落盘；未执行代码"
+                    task["artifact"] = result["relative_path"]
+                    task["file_name"] = result["file_name"]
+                    task["provider"] = result["provider"]
+                    task["test_result"] = result["test_result"]
+                    results.append(result)
+                except AgentNotConfiguredError as exc:
+                    task["status"] = "未配置"
+                    task["error"] = str(exc)
+                    failures.append({"task_id": task.get("id"), "error": str(exc)})
+                except Exception as exc:
+                    task["status"] = "失败"
+                    task["error"] = str(exc)
+                    failures.append({"task_id": task.get("id"), "error": str(exc)})
+                save_data(data)
             summary_msg = {
                 "id": "M" + str(len(data.get("messages", [])) + 1),
-                "sender": "Gemini",
-                "name": "Gemini 调度中枢",
-                "text": f"🎉 【全部任务真实代码落地完成】\n已调度各 Agent 将 {len(results)} 个任务的代码实打实写入磁盘目录 `outputs/`，并通过沙盒回归门禁验证！",
+                "sender": "System",
+                "name": "执行结果汇总",
+                "text": f"真实 API 产物生成 {len(results)} 项；失败或未配置 {len(failures)} 项。生成的代码未被执行，测试未运行。",
                 "time": "刚刚"
             }
             data.setdefault("messages", []).append(summary_msg)
             save_data(data)
-            self.send_json(200, {"success": True, "tasks": data.get("tasks", []), "results": results})
+            self.send_json(200 if not failures else 207, {
+                "success": len(failures) == 0,
+                "tasks": data.get("tasks", []),
+                "results": results,
+                "failures": failures
+            })
             return
 
         # 新增自定义任务
@@ -457,7 +521,18 @@ class HubRequestHandler(BaseHTTPRequestHandler):
 
                 ai_result = call_real_gemini_brain(text)
                 if not ai_result or "tasks" not in ai_result:
-                    ai_result = fallback_smart_dispatch(text)
+                    error_text = "需求拆解失败：Gemini API 未配置、调用失败或返回内容不是有效 JSON。未创建虚假任务；请检查 GEMINI_API_KEY、模型配置和服务日志。"
+                    error_msg = {
+                        "id": "M" + str(len(data.get("messages", [])) + 1),
+                        "sender": "System",
+                        "name": "执行错误",
+                        "text": error_text,
+                        "time": "刚刚"
+                    }
+                    data.setdefault("messages", []).append(error_msg)
+                    save_data(data)
+                    self.send_json(502, {"success": False, "error": error_text, "messages": [user_msg, error_msg]})
+                    return
 
                 analysis = ai_result.get("gemini_analysis", "需求意图已解构并分配完成。")
                 raw_tasks = ai_result.get("tasks", [])
@@ -487,19 +562,8 @@ class HubRequestHandler(BaseHTTPRequestHandler):
                 }
                 data.setdefault("messages", []).append(gemini_reply)
 
+                # 只发布真实 Gemini 调度结果；不把第一人称生成文本冒充其他 Agent 回执。
                 added_replies = [user_msg, gemini_reply]
-                for ack in agent_acks:
-                    agent_name = ack.get("agent", "Agent")
-                    ack_text = ack.get("ack", "已接收任务，准备编写落地代码。")
-                    ack_msg = {
-                        "id": "M" + str(len(data.get("messages", [])) + 1),
-                        "sender": agent_name,
-                        "name": f"{agent_name} Agent",
-                        "text": ack_text,
-                        "time": "刚刚"
-                    }
-                    data.setdefault("messages", []).append(ack_msg)
-                    added_replies.append(ack_msg)
 
                 save_data(data)
                 self.send_json(200, {"success": True, "messages": added_replies, "new_tasks": created_tasks})
@@ -521,9 +585,11 @@ class HubRequestHandler(BaseHTTPRequestHandler):
         self.send_error(404, "Not Found")
 
 def run(port=8765):
-    server_address = ("0.0.0.0", port)
+    # Remote/LAN exposure is disabled until an authenticated access layer exists.
+    server_address = ("127.0.0.1", port)
     httpd = ThreadingHTTPServer(server_address, HubRequestHandler)
-    print(f"🚀 [Hub Server] Listening at http://0.0.0.0:{port}")
+    print(f"🚀 [Hub Server] Listening locally at http://127.0.0.1:{port}")
+    print("🔒 远程访问已禁用：请勿通过公网隧道暴露此服务。"
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
