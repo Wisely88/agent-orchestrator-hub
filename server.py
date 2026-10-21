@@ -51,7 +51,7 @@ if GEMINI_API_KEY:
     except Exception as e:
         print(f"⚠️ [AI Brain] Gemini 客户端初始化失败: {e}")
 else:
-    print("ℹ️ [AI Brain] 未配置 GEMINI_API_KEY；需求拆解将明确失败，不会伪造任务。
+    print("ℹ️ [AI Brain] 未配置 GEMINI_API_KEY；需求拆解将明确失败，不会伪造任务。")
 
 # 获取本机局域网 IP
 def get_local_ip():
