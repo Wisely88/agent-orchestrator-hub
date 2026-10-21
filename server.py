@@ -541,7 +541,7 @@ def run(port=8765):
     server_address = ("127.0.0.1", port)
     httpd = ThreadingHTTPServer(server_address, HubRequestHandler)
     print(f"🚀 [Hub Server] Listening locally at http://127.0.0.1:{port}")
-    print("🔒 远程访问已禁用：请勿通过公网隧道暴露此服务。"
+    print("🔒 远程访问已禁用：请勿通过公网隧道暴露此服务。")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
