@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-  <title>Gemini 跨端多 Agent 协同研发工作台</title>
+  <title>Agent 协同研发工作台</title>
   <link rel="manifest" href="/manifest.json">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -45,12 +45,12 @@
       </div>
       <div>
         <div class="flex items-center gap-1.5">
-          <h1 class="text-xs sm:text-sm font-bold tracking-tight text-white">Gemini 多 Agent 协同研发中枢</h1>
+          <h1 class="text-xs sm:text-sm font-bold tracking-tight text-white">Agent 协同研发工作台</h1>
           <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
         </div>
         <div class="text-[10px] text-slate-400 flex items-center gap-2">
-          <span>电脑/手机双向实时同步</span>
-          <span class="hidden sm:inline text-indigo-400">· 真实代码编写与落盘执行</span>
+          <span>本机工作台 · 真实调用状态</span>
+          <span class="hidden sm:inline text-indigo-400">· 未配置的 Agent 不会被冒充执行</span>
         </div>
       </div>
     </div>
@@ -78,7 +78,7 @@
           <h2 class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
             <span>📋</span> 研发任务规划与执行看板
           </h2>
-          <p class="text-[10px] text-slate-400">输入需求 Gemini 自动拆解 · 点击即可调用 Agent 真实落盘写代码</p>
+          <p class="text-[10px] text-slate-400">Gemini 真实拆解 · 仅调用已配置的 Agent · 产物不会自动执行</p>
         </div>
 
         <button onclick="openModal()" class="px-2.5 py-1 text-xs font-semibold rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1 active:scale-95">
@@ -95,7 +95,7 @@
       <div class="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-400 shrink-0">
         <div class="flex items-center gap-2">
           <span>任务总数: <strong id="taskCount" class="text-white">0</strong></span>
-          <span>已交付: <strong id="dispatchedCount" class="text-emerald-400">0</strong></span>
+          <span>已生成产物: <strong id="dispatchedCount" class="text-emerald-400">0</strong></span>
         </div>
         <div id="ipIndicator" class="text-slate-500">
           家中直连: <span class="text-slate-400 font-mono" id="localIpText">192.168.1.11:8765</span>
@@ -200,6 +200,13 @@
     let localTasks = [];
     let localMessages = [];
 
+    function escapeHtml(value) {
+      return String(value ?? "").replace(/[&<>"']/g, ch => ({
+        "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
+      }[ch]));
+    }
+
+
     async function syncData() {
       try {
         const res = await fetch("/api/data");
@@ -245,38 +252,38 @@
         card.innerHTML = `
           <div class="flex items-start justify-between gap-1.5">
             <div class="flex items-center gap-1.5">
-              <span class="text-[11px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400">${t.id}</span>
-              <h4 class="text-xs sm:text-sm font-semibold text-white">${t.title}</h4>
+              <span class="text-[11px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400">${escapeHtml(t.id)}</span>
+              <h4 class="text-xs sm:text-sm font-semibold text-white">${escapeHtml(t.title)}</h4>
             </div>
             <div class="flex items-center gap-1">
               <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full border ${style.badge}">
                 ${style.name}
               </span>
-              <button onclick="deleteTask('${t.id}')" class="text-slate-500 hover:text-red-400 text-xs px-1">✕</button>
+              <button onclick="deleteTask('${escapeHtml(t.id)}')" class="text-slate-500 hover:text-red-400 text-xs px-1">✕</button>
             </div>
           </div>
-          <p class="text-xs text-slate-400 leading-relaxed">${t.desc || '暂无描述'}</p>
+          <p class="text-xs text-slate-400 leading-relaxed">${escapeHtml(t.desc || '暂无描述')}</p>
           
           <!-- 真实交付物与操作区 -->
           <div class="flex flex-wrap items-center justify-between pt-2 border-t border-slate-800/80 text-[11px] gap-2">
             <div>
               ${t.artifact ? `
-                <a href="${t.artifact}" target="_blank" class="text-emerald-400 hover:underline flex items-center gap-1 font-mono text-[10px]">
-                  <span>📄</span> 产物: ${t.file_name} (点击查看)
+                <a href="${escapeHtml(t.artifact)}" target="_blank" class="text-emerald-400 hover:underline flex items-center gap-1 font-mono text-[10px]">
+                  <span>📄</span> 产物: ${escapeHtml(t.file_name)} (点击查看)
                 </a>
               ` : `
-                <span class="text-slate-500 text-[10px]">状态: <strong class="text-amber-400 font-medium">${t.status}</strong></span>
+                <span class="text-slate-500 text-[10px]">状态: <strong class="text-amber-400 font-medium">${escapeHtml(t.status)}</strong></span>
               `}
             </div>
 
             <div>
               ${!isDelivered ? `
-                <button onclick="executeSingleTask('${t.id}')" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition flex items-center gap-1 active:scale-95">
+                <button onclick="executeSingleTask('${escapeHtml(t.id)}')" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition flex items-center gap-1 active:scale-95">
                   <span>▶</span> 真正写代码落盘
                 </button>
               ` : `
                 <span class="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
-                  <span>✓</span> 沙盒门禁通过
+                  <span>✓</span> 产物已保存（未执行）
                 </span>
               `}
             </div>
@@ -301,14 +308,14 @@
         div.className = "flex gap-2 items-start text-xs";
         div.innerHTML = `
           <div class="w-6 h-6 rounded-lg ${style.avatar} flex items-center justify-center text-white font-bold text-[10px] shrink-0 mt-0.5">
-            ${(m.sender || 'U')[0]}
+            ${escapeHtml((m.sender || 'U')[0])}
           </div>
           <div class="bg-[#12192c] border border-slate-800 rounded-xl p-2.5 max-w-[88%] space-y-1 shadow-sm">
             <div class="flex items-center justify-between gap-2">
-              <span class="font-bold ${style.text}">${m.name || m.sender}</span>
-              <span class="text-[10px] text-slate-500">${m.time || ''}</span>
+              <span class="font-bold ${style.text}">${escapeHtml(m.name || m.sender)}</span>
+              <span class="text-[10px] text-slate-500">${escapeHtml(m.time || '')}</span>
             </div>
-            <div class="text-slate-200 leading-relaxed whitespace-pre-line text-xs">${m.text}</div>
+            <div class="text-slate-200 leading-relaxed whitespace-pre-line text-xs">${escapeHtml(m.text)}</div>
           </div>
         `;
         container.appendChild(div);
@@ -329,7 +336,9 @@
 
       try {
         const res = await fetch(`/api/tasks/execute/${taskId}`, { method: "POST" });
-        if (res.ok) await syncData();
+        const payload = await res.json().catch(() => ({}));
+        await syncData();
+        if (!res.ok) alert(payload.error || payload.task?.error || "执行失败；请查看任务状态和服务日志。");
       } catch (e) {
         alert("调用执行失败");
       }
@@ -349,9 +358,13 @@
 
       try {
         const res = await fetch("/api/tasks/execute_all", { method: "POST" });
-        if (res.ok) {
-          await syncData();
-          alert("🎉 所有 Agent 的落地代码已实打实写入本地 outputs/ 目录，沙盒验证完成！");
+        const payload = await res.json().catch(() => ({}));
+        await syncData();
+        if (res.ok && payload.success) {
+          alert("产物生成完成。注意：生成的代码未执行，测试未运行。");
+        } else {
+          const failures = (payload.failures || []).map(item => `${item.task_id}: ${item.error}`).join("\n");
+          alert("部分任务失败或 Agent 未配置。\n" + (failures || payload.error || "请查看任务状态和服务日志。"));
         }
       } catch (e) {
         alert("执行失败，请检查网络");
