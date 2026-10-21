@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>Gemini 跨端多 Agent 协同研发工作台</title>
+  <link rel="manifest" href="/manifest.json">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="GeminiHub">
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    html, body {
+      height: 100%;
+      height: 100dvh;
+      overflow: hidden;
+      margin: 0;
+      padding: 0;
+      background-color: #090d16;
+    }
+    .smooth-scroll {
+      -webkit-overflow-scrolling: touch;
+      overscroll-behavior-y: contain;
+      scroll-behavior: smooth;
+    }
+    @keyframes pulse-subtle {
+      0%, 100% { opacity: 1; transform: scale(1); }
+      50% { opacity: 0.88; transform: scale(1.02); }
+    }
+    .pulse-btn {
+      animation: pulse-subtle 2.2s infinite ease-in-out;
+    }
+    ::-webkit-scrollbar { width: 4px; height: 4px; }
+    ::-webkit-scrollbar-thumb { background: rgba(140, 140, 140, 0.25); border-radius: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+  </style>
+</head>
+<body class="bg-[#090d16] text-slate-100 flex flex-col font-sans antialiased h-full overflow-hidden">
+
+  <!-- 顶部状态栏 -->
+  <header class="border-b border-slate-800/80 bg-[#0d1322]/95 backdrop-blur shrink-0 z-30 px-3.5 sm:px-6 py-2 flex items-center justify-between">
+    <div class="flex items-center gap-2.5">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-600 flex items-center justify-center text-white font-bold text-sm shadow-md shadow-indigo-500/20">
+        G
+      </div>
+      <div>
+        <div class="flex items-center gap-1.5">
+          <h1 class="text-xs sm:text-sm font-bold tracking-tight text-white">Gemini 多 Agent 协同研发中枢</h1>
+          <span class="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse"></span>
+        </div>
+        <div class="text-[10px] text-slate-400 flex items-center gap-2">
+          <span>电脑/手机双向实时同步</span>
+          <span class="hidden sm:inline text-indigo-400">· 真实代码编写与落盘执行</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- 顶部操作 -->
+    <div class="flex items-center gap-1.5">
+      <button onclick="resetBoard()" class="px-2 py-1 text-[11px] rounded-lg bg-slate-800 text-slate-400 hover:text-white border border-slate-700 transition" title="清空任务">
+        清空
+      </button>
+      <button onclick="executeAllTasks()" class="px-3 py-1 text-xs font-bold rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 text-white shadow transition flex items-center gap-1 active:scale-95">
+        <span>⚡</span> 编写全部代码
+      </button>
+    </div>
+  </header>
+
+  <!-- 主体工作区容器 -->
+  <main class="flex-1 min-h-0 max-w-7xl w-full mx-auto p-2 sm:p-4 grid grid-cols-1 md:grid-cols-12 gap-2.5 sm:gap-4 overflow-hidden relative">
+
+    <!-- 看板模块 (左栏 7 列) -->
+    <section id="panelKanban" class="md:col-span-7 flex flex-col bg-[#0d1322] border border-slate-800/80 rounded-2xl p-3 sm:p-4 shadow-xl overflow-hidden h-full min-h-0">
+      
+      <!-- 看板头部 -->
+      <div class="flex items-center justify-between gap-2 mb-2 shrink-0">
+        <div>
+          <h2 class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+            <span>📋</span> 研发任务规划与执行看板
+          </h2>
+          <p class="text-[10px] text-slate-400">输入需求 Gemini 自动拆解 · 点击即可调用 Agent 真实落盘写代码</p>
+        </div>
+
+        <button onclick="openModal()" class="px-2.5 py-1 text-xs font-semibold rounded-xl bg-indigo-600/20 hover:bg-indigo-600/30 text-indigo-300 border border-indigo-500/30 transition flex items-center gap-1 active:scale-95">
+          <span>+</span> 排布工作
+        </button>
+      </div>
+
+      <!-- 任务卡片滚动列表 -->
+      <div id="taskList" class="flex-1 min-h-0 overflow-y-auto smooth-scroll space-y-2.5 pr-1 pb-16 md:pb-0">
+        <!-- 动态渲染任务卡片 -->
+      </div>
+
+      <!-- 看板底部指标 -->
+      <div class="mt-2 pt-2 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-400 shrink-0">
+        <div class="flex items-center gap-2">
+          <span>任务总数: <strong id="taskCount" class="text-white">0</strong></span>
+          <span>已交付: <strong id="dispatchedCount" class="text-emerald-400">0</strong></span>
+        </div>
+        <div id="ipIndicator" class="text-slate-500">
+          家中直连: <span class="text-slate-400 font-mono" id="localIpText">192.168.1.11:8765</span>
+        </div>
+      </div>
+    </section>
+
+    <!-- 协同对话流模块 (右栏 5 列) -->
+    <section id="panelChat" class="md:col-span-5 hidden md:flex flex-col bg-[#0d1322] border border-slate-800/80 rounded-2xl shadow-xl overflow-hidden h-full min-h-0">
+      
+      <!-- 聊天头部 -->
+      <div class="p-2.5 border-b border-slate-800 bg-[#12192c]/60 flex items-center justify-between shrink-0">
+        <div class="flex items-center gap-1.5">
+          <span class="w-2 h-2 rounded-full bg-emerald-400"></span>
+          <span class="text-xs font-bold text-white">多 Agent 协同实时流</span>
+        </div>
+        <span class="text-[10px] text-slate-400">真实 Gemini 2.5 深度思考</span>
+      </div>
+
+      <!-- 消息列表 -->
+      <div id="messageList" class="flex-1 min-h-0 overflow-y-auto smooth-scroll p-3 space-y-2.5">
+        <!-- 动态消息 -->
+      </div>
+
+      <!-- 底部聊天输入栏 (手机端 pb-[68px] 保证始终完整露在底部导航栏之上) -->
+      <div class="p-2 border-t border-slate-800 bg-[#12192c]/95 shrink-0 pb-[68px] md:pb-2">
+        <form onsubmit="sendMessage(event)" class="flex gap-2">
+          <input id="chatInput" type="text" placeholder="输入任何工程任务（例如：为项目编写 REST API 并补充 pytest 单测）..." class="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-xs text-white placeholder-slate-500 focus:outline-none focus:border-indigo-500">
+          <button id="sendBtn" type="submit" class="px-3.5 py-2 bg-indigo-600 hover:bg-indigo-500 text-white rounded-xl text-xs font-bold transition active:scale-95 shrink-0 flex items-center gap-1">
+            <span>🚀</span> 发送
+          </button>
+        </form>
+      </div>
+
+    </section>
+
+  </main>
+
+  <!-- 手机端底部悬浮导航 Tab (固定最下层) -->
+  <nav class="md:hidden fixed bottom-0 inset-x-0 bg-[#0d1322]/98 backdrop-blur border-t border-slate-800 z-40 px-6 py-2 flex items-center justify-around text-xs shrink-0">
+    <button onclick="switchMobileTab('kanban')" id="tabKanban" class="flex flex-col items-center gap-0.5 text-indigo-400 font-bold transition">
+      <span class="text-base">📋</span>
+      <span class="text-[11px]">任务看板</span>
+    </button>
+    <button onclick="executeAllTasks()" class="flex flex-col items-center gap-0.5 text-white font-bold bg-emerald-600 px-3.5 py-1 rounded-xl shadow-lg shadow-emerald-600/40 active:scale-95 transition">
+      <span class="text-base">⚡</span>
+      <span class="text-[10px]">一键落盘</span>
+    </button>
+    <button onclick="switchMobileTab('chat')" id="tabChat" class="flex flex-col items-center gap-0.5 text-slate-400 font-medium transition">
+      <span class="text-base">💬</span>
+      <span class="text-[11px]">协同流</span>
+    </button>
+  </nav>
+
+  <!-- 新建任务弹窗 -->
+  <div id="taskModal" class="hidden fixed inset-0 bg-black/70 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+    <div class="bg-[#0d1322] border border-slate-800 rounded-2xl max-w-md w-full p-4 space-y-3 shadow-2xl">
+      <div class="flex items-center justify-between border-b border-slate-800 pb-2">
+        <h3 class="text-sm font-bold text-white flex items-center gap-1.5">
+          <span>✨</span> 排布新研发工作
+        </h3>
+        <button onclick="closeModal()" class="text-slate-400 hover:text-white text-base">✕</button>
+      </div>
+
+      <div class="space-y-2 text-xs">
+        <div>
+          <label class="block text-slate-400 mb-1">任务名称</label>
+          <input id="newTitle" type="text" placeholder="例如：设计数据同步接口" class="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500">
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">详细描述与技术要求</label>
+          <textarea id="newDesc" rows="3" placeholder="具体功能描述与预期交付物..." class="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-white focus:outline-none focus:border-indigo-500"></textarea>
+        </div>
+        <div>
+          <label class="block text-slate-400 mb-1">指派 Agent</label>
+          <select id="newAgent" class="w-full bg-slate-900 border border-slate-700/80 rounded-xl px-2.5 py-1.5 text-white focus:outline-none focus:border-indigo-500">
+            <option value="Claude">Claude (核心研发/算法)</option>
+            <option value="Codex">Codex (自动化单测/回归)</option>
+            <option value="Muse">Muse (视觉/交互/原型)</option>
+            <option value="OpenClaw">OpenClaw (爬虫采集/数据字典)</option>
+          </select>
+        </div>
+      </div>
+
+      <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+        <button onclick="closeModal()" class="px-3 py-1.5 text-xs rounded-xl bg-slate-800 text-slate-300">取消</button>
+        <button onclick="submitNewTask()" class="px-4 py-1.5 text-xs rounded-xl bg-indigo-600 hover:bg-indigo-500 text-white font-bold shadow-md">排入看板</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const agentStyle = {
+      Claude: { name: "Claude (核心研发)", badge: "bg-amber-500/20 text-amber-400 border-amber-500/30", avatar: "bg-amber-600", text: "text-amber-400" },
+      Codex: { name: "Codex (单测门禁)", badge: "bg-emerald-500/20 text-emerald-400 border-emerald-500/30", avatar: "bg-emerald-600", text: "text-emerald-400" },
+      Muse: { name: "Muse (视觉交互)", badge: "bg-pink-500/20 text-pink-400 border-pink-500/30", avatar: "bg-pink-600", text: "text-pink-400" },
+      OpenClaw: { name: "OpenClaw (数据采集)", badge: "bg-cyan-500/20 text-cyan-400 border-cyan-500/30", avatar: "bg-cyan-600", text: "text-cyan-400" },
+      Gemini: { name: "Gemini (中枢调度)", badge: "bg-indigo-500/20 text-indigo-400 border-indigo-500/30", avatar: "bg-indigo-600", text: "text-indigo-400" },
+      Unassigned: { name: "待分配", badge: "bg-slate-700/40 text-slate-400 border-slate-600/30", avatar: "bg-slate-700", text: "text-slate-400" }
+    };
+
+    let localTasks = [];
+    let localMessages = [];
+
+    async function syncData() {
+      try {
+        const res = await fetch("/api/data");
+        if (!res.ok) return;
+        const data = await res.json();
+        
+        localTasks = data.tasks || [];
+        localMessages = data.messages || [];
+
+        if (data.local_ip) {
+          document.getElementById("localIpText").innerText = `${data.local_ip}:8765`;
+        }
+
+        renderTasks();
+        renderMessages();
+      } catch (e) {}
+    }
+
+    function renderTasks() {
+      const container = document.getElementById("taskList");
+      container.innerHTML = "";
+      let delivered = 0;
+
+      if (localTasks.length === 0) {
+        container.innerHTML = `
+          <div class="p-6 text-center text-slate-500 border border-dashed border-slate-800 rounded-xl space-y-2">
+            <span class="text-2xl">💡</span>
+            <p class="text-xs">当前暂无任务卡片。请在右侧聊天框输入您的真实研发需求，或点击上方【+ 排布工作】开始协同！</p>
+          </div>
+        `;
+        document.getElementById("taskCount").innerText = "0";
+        document.getElementById("dispatchedCount").innerText = "0";
+        return;
+      }
+
+      localTasks.forEach(t => {
+        const isDelivered = t.status.includes("已落盘");
+        if (isDelivered) delivered++;
+        const style = agentStyle[t.assignedAgent] || agentStyle.Unassigned;
+
+        const card = document.createElement("div");
+        card.className = "bg-[#12192c] border border-slate-800 rounded-xl p-3 shadow space-y-2 hover:border-slate-700 transition";
+        card.innerHTML = `
+          <div class="flex items-start justify-between gap-1.5">
+            <div class="flex items-center gap-1.5">
+              <span class="text-[11px] font-mono px-1.5 py-0.5 rounded bg-slate-900 text-slate-400">${t.id}</span>
+              <h4 class="text-xs sm:text-sm font-semibold text-white">${t.title}</h4>
+            </div>
+            <div class="flex items-center gap-1">
+              <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full border ${style.badge}">
+                ${style.name}
+              </span>
+              <button onclick="deleteTask('${t.id}')" class="text-slate-500 hover:text-red-400 text-xs px-1">✕</button>
+            </div>
+          </div>
+          <p class="text-xs text-slate-400 leading-relaxed">${t.desc || '暂无描述'}</p>
+          
+          <!-- 真实交付物与操作区 -->
+          <div class="flex flex-wrap items-center justify-between pt-2 border-t border-slate-800/80 text-[11px] gap-2">
+            <div>
+              ${t.artifact ? `
+                <a href="${t.artifact}" target="_blank" class="text-emerald-400 hover:underline flex items-center gap-1 font-mono text-[10px]">
+                  <span>📄</span> 产物: ${t.file_name} (点击查看)
+                </a>
+              ` : `
+                <span class="text-slate-500 text-[10px]">状态: <strong class="text-amber-400 font-medium">${t.status}</strong></span>
+              `}
+            </div>
+
+            <div>
+              ${!isDelivered ? `
+                <button onclick="executeSingleTask('${t.id}')" class="px-2.5 py-1 text-[11px] font-bold rounded-lg bg-emerald-600/20 hover:bg-emerald-600/30 text-emerald-300 border border-emerald-500/30 transition flex items-center gap-1 active:scale-95">
+                  <span>▶</span> 真正写代码落盘
+                </button>
+              ` : `
+                <span class="text-[10px] text-emerald-400 font-bold flex items-center gap-1">
+                  <span>✓</span> 沙盒门禁通过
+                </span>
+              `}
+            </div>
+          </div>
+        `;
+        container.appendChild(card);
+      });
+
+      document.getElementById("taskCount").innerText = localTasks.length;
+      document.getElementById("dispatchedCount").innerText = delivered;
+    }
+
+    function renderMessages() {
+      const container = document.getElementById("messageList");
+      const isScrolledToBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 60;
+
+      container.innerHTML = "";
+
+      localMessages.forEach(m => {
+        const style = agentStyle[m.sender] || { avatar: "bg-blue-600", text: "text-blue-400" };
+        const div = document.createElement("div");
+        div.className = "flex gap-2 items-start text-xs";
+        div.innerHTML = `
+          <div class="w-6 h-6 rounded-lg ${style.avatar} flex items-center justify-center text-white font-bold text-[10px] shrink-0 mt-0.5">
+            ${(m.sender || 'U')[0]}
+          </div>
+          <div class="bg-[#12192c] border border-slate-800 rounded-xl p-2.5 max-w-[88%] space-y-1 shadow-sm">
+            <div class="flex items-center justify-between gap-2">
+              <span class="font-bold ${style.text}">${m.name || m.sender}</span>
+              <span class="text-[10px] text-slate-500">${m.time || ''}</span>
+            </div>
+            <div class="text-slate-200 leading-relaxed whitespace-pre-line text-xs">${m.text}</div>
+          </div>
+        `;
+        container.appendChild(div);
+      });
+
+      if (isScrolledToBottom || container.scrollTop === 0) {
+        container.scrollTop = container.scrollHeight;
+      }
+    }
+
+    // 调用真正落盘执行单个任务
+    async function executeSingleTask(taskId) {
+      const btn = event?.currentTarget;
+      if (btn) {
+        btn.disabled = true;
+        btn.innerHTML = `<span>⏳</span> 正在编写代码与沙盒验证...`;
+      }
+
+      try {
+        const res = await fetch(`/api/tasks/execute/${taskId}`, { method: "POST" });
+        if (res.ok) await syncData();
+      } catch (e) {
+        alert("调用执行失败");
+      }
+    }
+
+    // 调用真正落盘执行全部任务
+    async function executeAllTasks() {
+      if (localTasks.length === 0) {
+        alert("看板暂无任务，请先输入需求让 Gemini 拆解或排布新工作！");
+        return;
+      }
+      const btn = event?.currentTarget;
+      if (btn) {
+        btn.disabled = true;
+        btn.classList.add("opacity-50");
+      }
+
+      try {
+        const res = await fetch("/api/tasks/execute_all", { method: "POST" });
+        if (res.ok) {
+          await syncData();
+          alert("🎉 所有 Agent 的落地代码已实打实写入本地 outputs/ 目录，沙盒验证完成！");
+        }
+      } catch (e) {
+        alert("执行失败，请检查网络");
+      } finally {
+        if (btn) {
+          btn.disabled = false;
+          btn.classList.remove("opacity-50");
+        }
+      }
+    }
+
+    async function resetBoard() {
+      if (!confirm("确定清空看板中的任务与状态吗？")) return;
+      try {
+        await fetch("/api/tasks/reset", { method: "POST" });
+        await syncData();
+      } catch (e) {
+        alert("清空失败");
+      }
+    }
+
+    async function submitNewTask() {
+      const title = document.getElementById("newTitle").value.trim();
+      const desc = document.getElementById("newDesc").value.trim();
+      const agent = document.getElementById("newAgent").value;
+      if (!title) return;
+
+      try {
+        await fetch("/api/tasks", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ title, desc, assignedAgent: agent })
+        });
+        closeModal();
+        document.getElementById("newTitle").value = "";
+        document.getElementById("newDesc").value = "";
+        await syncData();
+      } catch (e) {
+        alert("保存失败");
+      }
+    }
+
+    async function deleteTask(id) {
+      try {
+        await fetch("/api/tasks/" + id, { method: "DELETE" });
+        await syncData();
+      } catch (e) {}
+    }
+
+    async function sendMessage(e) {
+      e.preventDefault();
+      const input = document.getElementById("chatInput");
+      const btn = document.getElementById("sendBtn");
+      const text = input.value.trim();
+      if (!text) return;
+
+      input.value = "";
+      btn.disabled = true;
+      btn.classList.add("opacity-50");
+
+      try {
+        const res = await fetch("/api/messages", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ text, sender: "user", name: "人类用户" })
+        });
+        if (res.ok) {
+          await syncData();
+          setTimeout(() => {
+            const container = document.getElementById("messageList");
+            container.scrollTop = container.scrollHeight;
+          }, 100);
+        }
+      } catch (e) {
+        alert("指令发送失败");
+      } finally {
+        btn.disabled = false;
+        btn.classList.remove("opacity-50");
+      }
+    }
+
+    function switchMobileTab(tab) {
+      const pKanban = document.getElementById("panelKanban");
+      const pChat = document.getElementById("panelChat");
+      const tKanban = document.getElementById("tabKanban");
+      const tChat = document.getElementById("tabChat");
+
+      if (tab === "kanban") {
+        pKanban.classList.remove("hidden");
+        pKanban.classList.add("flex");
+        pChat.classList.add("hidden");
+        pChat.classList.remove("flex");
+
+        tKanban.className = "flex flex-col items-center gap-0.5 text-indigo-400 font-bold transition";
+        tChat.className = "flex flex-col items-center gap-0.5 text-slate-400 font-medium transition";
+      } else {
+        pKanban.classList.add("hidden");
+        pKanban.classList.remove("flex");
+        pChat.classList.remove("hidden");
+        pChat.classList.add("flex");
+
+        tChat.className = "flex flex-col items-center gap-0.5 text-indigo-400 font-bold transition";
+        tKanban.className = "flex flex-col items-center gap-0.5 text-slate-400 font-medium transition";
+        
+        setTimeout(() => {
+          const container = document.getElementById("messageList");
+          container.scrollTop = container.scrollHeight;
+        }, 80);
+      }
+    }
+
+    function openModal() {
+      document.getElementById("taskModal").classList.remove("hidden");
+    }
+    function closeModal() {
+      document.getElementById("taskModal").classList.add("hidden");
+    }
+
+    syncData();
+    setInterval(syncData, 2000);
+  </script>
+</body>
+</html>

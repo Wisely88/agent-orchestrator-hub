@@ -1,0 +1,30 @@
+# 环境变量与安全凭证 (严禁上传)
+.env
+.env.local
+.env.*.local
+
+# 日志与系统进程标识
+*.log
+*.pid
+server.log
+cloudflared.log
+test.log
+
+# Python 缓存
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+
+# 虚拟环境
+.venv/
+venv/
+ENV/
+
+# 动态运行生成产物与测试数据
+data/tasks.json
+outputs/
+
+# 系统杂项
+.DS_Store
+Thumbs.db

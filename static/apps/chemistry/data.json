@@ -1,0 +1,76 @@
+{
+  "elements": {
+    "H": { "name": "氢", "mass": 1.008, "number": 1, "color": "#ffffff" },
+    "C": { "name": "碳", "mass": 12.011, "number": 6, "color": "#4a5568" },
+    "N": { "name": "氮", "mass": 14.007, "number": 7, "color": "#3182ce" },
+    "O": { "name": "氧", "mass": 15.999, "number": 8, "color": "#e53e3e" },
+    "Na": { "name": "钠", "mass": 22.990, "number": 11, "color": "#805ad5" },
+    "Mg": { "name": "镁", "mass": 24.305, "number": 12, "color": "#d69e2e" },
+    "Al": { "name": "铝", "mass": 26.982, "number": 13, "color": "#a0aec0" },
+    "S": { "name": "硫", "mass": 32.065, "number": 16, "color": "#ecc94b" },
+    "Cl": { "name": "氯", "mass": 35.453, "number": 17, "color": "#38a169" },
+    "K": { "name": "钾", "mass": 39.098, "number": 19, "color": "#9f7aea" },
+    "Ca": { "name": "钙", "mass": 40.078, "number": 20, "color": "#dd6b20" },
+    "Fe": { "name": "铁", "mass": 55.845, "number": 26, "color": "#ed8936" },
+    "Cu": { "name": "铜", "mass": 63.546, "number": 29, "color": "#c05621" },
+    "Zn": { "name": "锌", "mass": 65.380, "number": 30, "color": "#718096" }
+  },
+  "reactions": [
+    {
+      "id": "R1",
+      "name": "铁与硫酸铜置换反应 (湿法炼铜)",
+      "equation": "Fe + CuSO4 = FeSO4 + Cu",
+      "reactants": ["Fe", "CuSO4"],
+      "products": ["FeSO4", "Cu"],
+      "phenomenon": "铁丝表面覆盖一层红色致密铜单质，溶液颜色由清澈的蓝色逐渐变为浅绿色。",
+      "type": "置换反应",
+      "visual": {
+        "color_before": "#3182ce",
+        "color_after": "#48bb78",
+        "precipitate": "红色单质 Cu 析出"
+      }
+    },
+    {
+      "id": "R2",
+      "name": "氢氧化钠与硫酸铜复分解反应",
+      "equation": "2NaOH + CuSO4 = Cu(OH)2↓ + Na2SO4",
+      "reactants": ["2NaOH", "CuSO4"],
+      "products": ["Cu(OH)2", "Na2SO4"],
+      "phenomenon": "两瓶清澈溶液混合瞬间，立即生成大量蓝色絮状氢氧化铜沉淀！",
+      "type": "复分解反应",
+      "visual": {
+        "color_before": "#2b6cb0",
+        "color_after": "#e2e8f0",
+        "precipitate": "生成蓝色絮状 Cu(OH)2 沉淀"
+      }
+    },
+    {
+      "id": "R3",
+      "name": "氢气在氧气中燃烧 (化合反应)",
+      "equation": "2H2 + O2 = 2H2O",
+      "reactants": ["2H2", "O2"],
+      "products": ["2H2O"],
+      "phenomenon": "纯净的氢气在空气中安静燃烧，产生淡蓝色火焰，烧杯内壁凝结大量水雾并放热。",
+      "type": "化合反应",
+      "visual": {
+        "color_before": "#1a202c",
+        "color_after": "#63b3ed",
+        "gas": "淡蓝色火焰与水蒸气凝结"
+      }
+    },
+    {
+      "id": "R4",
+      "name": "碳酸钙与稀盐酸反应 (制取二氧化碳)",
+      "equation": "CaCO3 + 2HCl = CaCl2 + H2O + CO2↑",
+      "reactants": ["CaCO3", "2HCl"],
+      "products": ["CaCl2", "H2O", "CO2"],
+      "phenomenon": "白色大理石块表面剧烈冒出大量二氧化碳气泡，固体逐渐溶解缩小。",
+      "type": "复分解反应",
+      "visual": {
+        "color_before": "#cbd5e0",
+        "color_after": "#edf2f7",
+        "gas": "剧烈产生 CO2 气泡冒出"
+      }
+    }
+  ]
+}

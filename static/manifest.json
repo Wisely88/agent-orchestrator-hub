@@ -1,0 +1,16 @@
+{
+  "name": "Gemini 协同中枢",
+  "short_name": "GeminiHub",
+  "description": "随时随地视觉化安排工作与 Gemini 智能分配工作台",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#090d16",
+  "theme_color": "#4f46e5",
+  "icons": [
+    {
+      "src": "data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><rect width='100' height='100' rx='20' fill='%234f46e5'/><text x='50' y='68' font-size='50' font-weight='bold' fill='white' text-anchor='middle'>G</text></svg>",
+      "sizes": "192x192 512x512",
+      "type": "image/svg+xml"
+    }
+  ]
+}

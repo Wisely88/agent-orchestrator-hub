@@ -1,0 +1,451 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="h-full">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+  <title>生动化学公式计算与反应演变模拟器 (MVP v0.1)</title>
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    @keyframes bubble {
+      0% { transform: translateY(0) scale(0.8); opacity: 0; }
+      50% { opacity: 0.8; }
+      100% { transform: translateY(-70px) scale(1.2); opacity: 0; }
+    }
+    @keyframes precipitate-drop {
+      0% { transform: translateY(-30px); opacity: 0; }
+      60% { opacity: 0.9; }
+      100% { transform: translateY(35px); opacity: 1; }
+    }
+    .bubble-anim {
+      animation: bubble 1.8s infinite ease-out;
+    }
+    .drop-anim {
+      animation: precipitate-drop 1.4s forwards cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+  </style>
+</head>
+<body class="bg-[#090d16] text-slate-100 flex flex-col font-sans antialiased h-full overflow-hidden select-none">
+
+  <!-- 顶部标题导航 -->
+  <header class="border-b border-slate-800 bg-[#0d1322]/95 px-4 py-2.5 flex items-center justify-between shrink-0">
+    <div class="flex items-center gap-2">
+      <div class="w-8 h-8 rounded-xl bg-gradient-to-tr from-cyan-500 to-indigo-600 flex items-center justify-center text-white text-base font-bold shadow-md shadow-cyan-500/20">
+        ⚗️
+      </div>
+      <div>
+        <div class="flex items-center gap-2">
+          <h1 class="text-sm sm:text-base font-bold text-white tracking-tight">化学计算与反应演变模拟器</h1>
+          <span class="px-2 py-0.5 text-[10px] font-semibold rounded-full bg-cyan-500/15 text-cyan-400 border border-cyan-500/30">
+            MVP 简单版
+          </span>
+        </div>
+        <p class="text-[10px] text-slate-400">Muse 视觉动效 · Claude 配平算法 · OpenClaw 数据底座</p>
+      </div>
+    </div>
+    <a href="/" class="px-2.5 py-1 text-xs rounded-lg bg-slate-800 text-slate-300 hover:text-white border border-slate-700 transition">
+      返回中枢
+    </a>
+  </header>
+
+  <!-- 主屏内容区域：左侧分子计算器 + 右侧生动反应演变视界 -->
+  <main class="flex-1 min-h-0 max-w-6xl w-full mx-auto p-3 sm:p-5 grid grid-cols-1 md:grid-cols-12 gap-3.5 sm:gap-5 overflow-y-auto">
+
+    <!-- 模块 1：化学式输入与分子量计算 (占 5 列) -->
+    <section class="md:col-span-5 bg-[#0d1322] border border-slate-800/80 rounded-2xl p-4 shadow-xl flex flex-col space-y-3.5">
+      <div>
+        <h2 class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+          <span>🧪</span> 分子式计算与组成分析
+        </h2>
+        <p class="text-[11px] text-slate-400">支持括号嵌套（如 Ca(OH)2、CuSO4）</p>
+      </div>
+
+      <!-- 快速选择样本 -->
+      <div class="flex flex-wrap gap-1.5 text-xs">
+        <span class="text-slate-500 text-[11px] self-center">快捷填入:</span>
+        <button onclick="setFormula('H2O')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[11px] border border-slate-700">H2O</button>
+        <button onclick="setFormula('CuSO4')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[11px] border border-slate-700">CuSO4</button>
+        <button onclick="setFormula('Ca(OH)2')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[11px] border border-slate-700">Ca(OH)2</button>
+        <button onclick="setFormula('CaCO3')" class="px-2 py-0.5 rounded bg-slate-800 hover:bg-slate-700 text-cyan-400 text-[11px] border border-slate-700">CaCO3</button>
+      </div>
+
+      <!-- 输入框 -->
+      <div class="flex gap-2">
+        <input id="formulaInput" type="text" value="CuSO4" placeholder="输入化学分子式..." class="flex-1 bg-slate-900 border border-slate-700/80 rounded-xl px-3 py-2 text-sm text-white font-mono focus:outline-none focus:border-cyan-500">
+        <button onclick="calcMolar()" class="px-4 py-2 bg-cyan-600 hover:bg-cyan-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-cyan-600/30">
+          计算
+        </button>
+      </div>
+
+      <!-- 计算结果呈现看板 -->
+      <div class="bg-slate-900/80 border border-slate-800 rounded-xl p-3.5 space-y-2">
+        <div class="flex items-center justify-between">
+          <span class="text-xs text-slate-400">相对分子质量 (M):</span>
+          <span id="molarMass" class="text-lg font-bold text-cyan-400 font-mono">159.609 g/mol</span>
+        </div>
+        <div class="pt-2 border-t border-slate-800">
+          <span class="text-[11px] text-slate-400 block mb-1.5">元素组成与原子计数:</span>
+          <div id="atomBreakdown" class="flex flex-wrap gap-2 text-xs">
+            <!-- 动态生成 -->
+          </div>
+        </div>
+      </div>
+
+      <!-- 2D 分子球棍模型生动微视图 -->
+      <div class="bg-slate-900/50 border border-slate-800 rounded-xl p-3 flex-1 flex flex-col items-center justify-center min-h-[140px] relative overflow-hidden">
+        <span class="absolute top-2 left-2 text-[10px] text-slate-500">生动分子结构模型</span>
+        <canvas id="moleculeCanvas" width="220" height="120" class="cursor-pointer"></canvas>
+        <span class="text-[10px] text-slate-500 mt-1">小球代表原子 · 连线代表共价键/离子键</span>
+      </div>
+    </section>
+
+    <!-- 模块 2：常见化学反应与公式演变过程 (占 7 列) -->
+    <section class="md:col-span-7 bg-[#0d1322] border border-slate-800/80 rounded-2xl p-4 shadow-xl flex flex-col space-y-3.5">
+      <div class="flex items-center justify-between">
+        <div>
+          <h2 class="text-xs sm:text-sm font-bold text-white flex items-center gap-1.5">
+            <span>✨</span> 常见化学反应与公式演变全过程
+          </h2>
+          <p class="text-[11px] text-slate-400">选择经典反应，观察实验现象与微观演变动画</p>
+        </div>
+      </div>
+
+      <!-- 反应方程式选择卡片组 -->
+      <div class="grid grid-cols-1 sm:grid-cols-2 gap-2" id="reactionBtns">
+        <!-- 动态生成经典反应按钮 -->
+      </div>
+
+      <!-- 演变实验大视窗 (Beaker / Test Tube Simulation) -->
+      <div class="bg-slate-900 border border-slate-800 rounded-xl p-4 flex flex-col sm:flex-row items-center gap-4 relative overflow-hidden">
+        
+        <!-- 模拟烧杯与粒子实验器 -->
+        <div class="w-36 h-44 rounded-b-2xl border-2 border-slate-600 bg-slate-950/60 relative overflow-hidden flex flex-col justify-end p-2 shrink-0 shadow-inner">
+          <div class="absolute top-1 right-2 text-[9px] text-slate-500">50ml 刻度</div>
+          <div class="absolute top-8 right-2 text-[9px] text-slate-500">30ml 刻度</div>
+          
+          <!-- 溶液液体层 (动态色彩) -->
+          <div id="liquidLayer" class="w-full h-24 rounded-b-xl transition-all duration-1000 relative flex items-end justify-center overflow-hidden" style="background-color: #3182ce;">
+            <!-- 沉淀粒子区 -->
+            <div id="precipitateBox" class="w-full flex justify-center pb-1"></div>
+            <!-- 气体气泡区 -->
+            <div id="bubbleBox" class="absolute inset-0 pointer-events-none"></div>
+          </div>
+        </div>
+
+        <!-- 右侧：演变过程 4 步演变流 -->
+        <div class="flex-1 space-y-2 text-xs">
+          <div>
+            <span class="text-[11px] font-bold text-cyan-400 block mb-0.5" id="rxnEquation">Fe + CuSO4 = FeSO4 + Cu</span>
+            <div class="text-[11px] text-slate-300 leading-relaxed" id="rxnPhenomenon">
+              铁丝表面逐渐覆盖一层致密的红色铜单质，溶液颜色由蓝色逐渐褪变为浅绿色。
+            </div>
+          </div>
+
+          <!-- 4 步演变流程步进条 -->
+          <div class="bg-[#12192c] p-2.5 rounded-xl border border-slate-800 space-y-1.5">
+            <div class="flex items-center justify-between text-[10px]">
+              <span class="font-semibold text-slate-400">公式微观演变逻辑:</span>
+              <span class="text-cyan-400 font-bold" id="stepText">阶段 1: 反应物接触</span>
+            </div>
+            <div class="w-full bg-slate-800 h-1.5 rounded-full overflow-hidden">
+              <div id="progressBar" class="bg-gradient-to-r from-cyan-500 to-indigo-500 h-full w-1/4 transition-all duration-500"></div>
+            </div>
+            <p id="stepDetail" class="text-[11px] text-slate-400 leading-normal">
+              铁单质(Fe)与硫酸铜溶液中的 Cu²⁺ 阳离子充分接触碰撞。
+            </p>
+          </div>
+
+          <button onclick="playEvolution()" class="w-full py-2 bg-gradient-to-r from-indigo-600 to-cyan-600 hover:from-indigo-500 hover:to-cyan-500 text-white rounded-xl text-xs font-bold transition shadow-md shadow-indigo-600/30 flex items-center justify-center gap-1.5 active:scale-95">
+            <span>▶</span> 开始完整反应演变过程
+          </button>
+        </div>
+
+      </div>
+
+    </section>
+
+  </main>
+
+  <script>
+    const ELEMENT_WEIGHTS = {
+      H: { name: "氢", mass: 1.008, color: "#e2e8f0" },
+      C: { name: "碳", mass: 12.011, color: "#4a5568" },
+      N: { name: "氮", mass: 14.007, color: "#3182ce" },
+      O: { name: "氧", mass: 15.999, color: "#e53e3e" },
+      Na: { name: "钠", mass: 22.990, color: "#805ad5" },
+      Mg: { name: "镁", mass: 24.305, color: "#d69e2e" },
+      Al: { name: "铝", mass: 26.982, color: "#a0aec0" },
+      S: { name: "硫", mass: 32.065, color: "#ecc94b" },
+      Cl: { name: "氯", mass: 35.453, color: "#38a169" },
+      Ca: { name: "钙", mass: 40.078, color: "#dd6b20" },
+      Fe: { name: "铁", mass: 55.845, color: "#ed8936" },
+      Cu: { name: "铜", mass: 63.546, color: "#c05621" }
+    };
+
+    const REACTIONS = [
+      {
+        id: "R1",
+        name: "铁置换硫酸铜 (湿法炼铜)",
+        equation: "Fe + CuSO4 = FeSO4 + Cu",
+        phenomenon: "铁置换出红色铜单质附着在表面，溶液由清澈蓝色渐变为浅绿色。",
+        colorBefore: "#3182ce",
+        colorAfter: "#48bb78",
+        precipitate: "🔴 红色单质铜沉淀生成",
+        hasGas: false,
+        steps: [
+          "阶段 1: 固体铁单质放入蓝色 CuSO4 溶液中充分接触",
+          "阶段 2: 铁原子失去 2 个电子发生氧化: Fe - 2e⁻ ➔ Fe²⁺",
+          "阶段 3: 铜离子得到 2 个电子发生还原: Cu²⁺ + 2e⁻ ➔ Cu",
+          "阶段 4: 红色铜附着，溶液变为 FeSO4 浅绿色，反应守恒完成"
+        ]
+      },
+      {
+        id: "R2",
+        name: "复分解沉淀 (氢氧化钠+硫酸铜)",
+        equation: "2NaOH + CuSO4 = Cu(OH)2↓ + Na2SO4",
+        phenomenon: "两瓶无色与蓝色溶液混合瞬间，立刻析出大量蓝色絮状氢氧化铜沉淀！",
+        colorBefore: "#2b6cb0",
+        colorAfter: "#cbd5e0",
+        precipitate: "🔵 蓝色絮状 Cu(OH)2 沉淀",
+        hasGas: false,
+        steps: [
+          "阶段 1: NaOH 电离出 Na⁺、OH⁻；CuSO4 电离出 Cu²⁺、SO4²⁻",
+          "阶段 2: Cu²⁺ 与 OH⁻ 离子剧烈碰撞结合",
+          "阶段 3: 生成难溶于水的 Cu(OH)2 沉淀颗粒",
+          "阶段 4: 产生大量蓝色絮状沉淀，剩余溶液呈中性 Na2SO4"
+        ]
+      },
+      {
+        id: "R3",
+        name: "大理石与盐酸 (二氧化碳制取)",
+        equation: "CaCO3 + 2HCl = CaCl2 + H2O + CO2↑",
+        phenomenon: "白色碳酸钙大理石表面剧烈翻滚冒出大量二氧化碳气泡并逐渐溶解。",
+        colorBefore: "#718096",
+        colorAfter: "#edf2f7",
+        precipitate: "",
+        hasGas: true,
+        steps: [
+          "阶段 1: 稀盐酸溶液接触碳酸钙固体表面",
+          "阶段 2: 氢离子与碳酸根离子结合生成不稳定的碳酸 H2CO3",
+          "阶段 3: 碳酸立即自发分解为水和二氧化碳气体",
+          "阶段 4: 剧烈冒出 CO2 气泡，生成物完全配平守恒"
+        ]
+      }
+    ];
+
+    let currentRxn = REACTIONS[0];
+
+    // 分子式解析算法 (栈算法)
+    function parseFormula(formula) {
+      formula = formula.trim().replace(/[↓↑]/g, "");
+      const coeffMatch = formula.match(/^(\d+)/);
+      const coeff = coeffMatch ? parseInt(coeffMatch[1]) : 1;
+      formula = formula.replace(/^\d+/, "");
+
+      const stack = [{}];
+      let i = 0;
+      const n = formula.length;
+
+      while (i < n) {
+        const char = formula[i];
+        if (char === "(") {
+          stack.push({});
+          i++;
+        } else if (char === ")") {
+          i++;
+          const numStart = i;
+          while (i < n && /\d/.test(formula[i])) i++;
+          const factor = numStart < i ? parseInt(formula.slice(numStart, i)) : 1;
+          const top = stack.pop();
+          for (let elem in top) {
+            stack[stack.length - 1][elem] = (stack[stack.length - 1][elem] || 0) + top[elem] * factor;
+          }
+        } else if (/[A-Z]/.test(char)) {
+          let elem = char;
+          i++;
+          if (i < n && /[a-z]/.test(formula[i])) {
+            elem += formula[i];
+            i++;
+          }
+          const numStart = i;
+          while (i < n && /\d/.test(formula[i])) i++;
+          const count = numStart < i ? parseInt(formula.slice(numStart, i)) : 1;
+          stack[stack.length - 1][elem] = (stack[stack.length - 1][elem] || 0) + count;
+        } else {
+          i++;
+        }
+      }
+
+      const res = stack[0];
+      for (let k in res) res[k] *= coeff;
+      return res;
+    }
+
+    function setFormula(f) {
+      document.getElementById("formulaInput").value = f;
+      calcMolar();
+    }
+
+    function calcMolar() {
+      const f = document.getElementById("formulaInput").value.trim();
+      if (!f) return;
+      try {
+        const atoms = parseFormula(f);
+        let total = 0;
+        const box = document.getElementById("atomBreakdown");
+        box.innerHTML = "";
+
+        for (let elem in atoms) {
+          const info = ELEMENT_WEIGHTS[elem] || { name: elem, mass: 12.0, color: "#a0aec0" };
+          const mass = info.mass * atoms[elem];
+          total += mass;
+
+          const chip = document.createElement("span");
+          chip.className = "px-2 py-1 rounded bg-slate-800 text-slate-200 border border-slate-700 flex items-center gap-1";
+          chip.innerHTML = `<span class="w-2 h-2 rounded-full" style="background:${info.color}"></span> ${elem} × ${atoms[elem]}`;
+          box.appendChild(chip);
+        }
+
+        document.getElementById("molarMass").innerText = total.toFixed(3) + " g/mol";
+        drawMolecule(atoms);
+      } catch (e) {
+        alert("分子式格式有误");
+      }
+    }
+
+    function drawMolecule(atoms) {
+      const canvas = document.getElementById("moleculeCanvas");
+      const ctx = canvas.getContext("2d");
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+      const elems = Object.keys(atoms);
+      const centerX = canvas.width / 2;
+      const centerY = canvas.height / 2;
+
+      // 绘制中心原子
+      const mainElem = elems[0] || "Cu";
+      const mainInfo = ELEMENT_WEIGHTS[mainElem] || { color: "#3182ce" };
+
+      ctx.beginPath();
+      ctx.arc(centerX, centerY, 18, 0, Math.PI * 2);
+      ctx.fillStyle = mainInfo.color;
+      ctx.fill();
+      ctx.strokeStyle = "#ffffff";
+      ctx.lineWidth = 1.5;
+      ctx.stroke();
+
+      ctx.fillStyle = "#ffffff";
+      ctx.font = "bold 11px sans-serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText(mainElem, centerX, centerY);
+
+      // 周围卫星原子
+      let count = 0;
+      for (let i = 1; i < elems.length; i++) {
+        const subElem = elems[i];
+        const subInfo = ELEMENT_WEIGHTS[subElem] || { color: "#e53e3e" };
+        const angle = (count * (Math.PI * 2 / 4));
+        const px = centerX + Math.cos(angle) * 45;
+        const py = centerY + Math.sin(angle) * 35;
+
+        // 连线
+        ctx.beginPath();
+        ctx.moveTo(centerX, centerY);
+        ctx.lineTo(px, py);
+        ctx.strokeStyle = "#718096";
+        ctx.lineWidth = 2;
+        ctx.stroke();
+
+        // 卫星球
+        ctx.beginPath();
+        ctx.arc(px, py, 12, 0, Math.PI * 2);
+        ctx.fillStyle = subInfo.color;
+        ctx.fill();
+        ctx.stroke();
+
+        ctx.fillStyle = "#ffffff";
+        ctx.fillText(subElem, px, py);
+        count++;
+      }
+    }
+
+    function selectReaction(idx) {
+      currentRxn = REACTIONS[idx];
+      document.getElementById("rxnEquation").innerText = currentRxn.equation;
+      document.getElementById("rxnPhenomenon").innerText = currentRxn.phenomenon;
+      document.getElementById("liquidLayer").style.backgroundColor = currentRxn.colorBefore;
+      document.getElementById("precipitateBox").innerHTML = "";
+      document.getElementById("bubbleBox").innerHTML = "";
+      document.getElementById("progressBar").style.width = "25%";
+      document.getElementById("stepText").innerText = "准备就绪";
+      document.getElementById("stepDetail").innerText = currentRxn.steps[0];
+    }
+
+    function playEvolution() {
+      const liquid = document.getElementById("liquidLayer");
+      const pBox = document.getElementById("precipitateBox");
+      const bBox = document.getElementById("bubbleBox");
+      const pBar = document.getElementById("progressBar");
+
+      // 阶段 1
+      pBar.style.width = "25%";
+      document.getElementById("stepText").innerText = "阶段 1/4";
+      document.getElementById("stepDetail").innerText = currentRxn.steps[0];
+      liquid.style.backgroundColor = currentRxn.colorBefore;
+
+      setTimeout(() => {
+        // 阶段 2
+        pBar.style.width = "50%";
+        document.getElementById("stepText").innerText = "阶段 2/4 (微观电离/碰撞)";
+        document.getElementById("stepDetail").innerText = currentRxn.steps[1];
+      }, 900);
+
+      setTimeout(() => {
+        // 阶段 3: 产生气体或沉淀
+        pBar.style.width = "75%";
+        document.getElementById("stepText").innerText = "阶段 3/4 (生成物析出)";
+        document.getElementById("stepDetail").innerText = currentRxn.steps[2];
+
+        if (currentRxn.precipitate) {
+          pBox.innerHTML = `<span class="px-2 py-0.5 rounded text-[10px] bg-slate-900/90 text-white border border-slate-700 drop-anim">${currentRxn.precipitate}</span>`;
+        }
+        if (currentRxn.hasGas) {
+          bBox.innerHTML = `
+            <div class="absolute bottom-2 left-6 w-3 h-3 rounded-full bg-white/70 bubble-anim"></div>
+            <div class="absolute bottom-4 left-16 w-2 h-2 rounded-full bg-white/80 bubble-anim" style="animation-delay: 0.3s"></div>
+            <div class="absolute bottom-1 right-8 w-3 h-3 rounded-full bg-white/70 bubble-anim" style="animation-delay: 0.6s"></div>
+          `;
+        }
+      }, 1800);
+
+      setTimeout(() => {
+        // 阶段 4: 最终颜色变化与平衡
+        pBar.style.width = "100%";
+        document.getElementById("stepText").innerText = "阶段 4/4 (反应完全守恒)";
+        document.getElementById("stepDetail").innerText = currentRxn.steps[3];
+        liquid.style.backgroundColor = currentRxn.colorAfter;
+      }, 2700);
+    }
+
+    // 初始化渲染
+    function init() {
+      const box = document.getElementById("reactionBtns");
+      REACTIONS.forEach((r, idx) => {
+        const btn = document.createElement("button");
+        btn.onclick = () => selectReaction(idx);
+        btn.className = "p-2 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-left border border-slate-700/80 transition flex flex-col justify-between";
+        btn.innerHTML = `
+          <span class="text-xs font-bold text-white">${r.name}</span>
+          <span class="text-[10px] text-cyan-400 font-mono mt-0.5">${r.equation}</span>
+        `;
+        box.appendChild(btn);
+      });
+
+      calcMolar();
+      selectReaction(0);
+    }
+
+    init();
+  </script>
+</body>
+</html>
