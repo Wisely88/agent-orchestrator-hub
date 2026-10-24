@@ -5,6 +5,7 @@ DIR="$( cd "$( dirname "${BASH_SOURCE[0]}" )" >/dev/null 2>&1 && pwd )"
 cd "$DIR"
 
 PORT="${HUB_PORT:-8765}"
+HOST="${HUB_HOST:-0.0.0.0}"
 SERVER_LOG="$DIR/server.log"
 PID_FILE="$DIR/hub.pid"
 
@@ -13,8 +14,17 @@ if lsof -Pi :"$PORT" -sTCP:LISTEN -t >/dev/null 2>&1; then
   exit 1
 fi
 
-PY_BIN="${PYTHON_BIN:-python3}"
-nohup "$PY_BIN" server.py "$PORT" > "$SERVER_LOG" 2>&1 &
+if [ -z "${PYTHON_BIN:-}" ]; then
+  if [ -x "/Volumes/wisely-data/dev-specs-knowledge-base/.venv/bin/python" ]; then
+    PY_BIN="/Volumes/wisely-data/dev-specs-knowledge-base/.venv/bin/python"
+  else
+    PY_BIN="python3"
+  fi
+else
+  PY_BIN="$PYTHON_BIN"
+fi
+
+nohup "$PY_BIN" server.py "$PORT" "$HOST" > "$SERVER_LOG" 2>&1 &
 SERVER_PID=$!
 echo "$SERVER_PID" > "$PID_FILE"
 

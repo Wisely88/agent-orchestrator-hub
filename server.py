@@ -536,12 +536,12 @@ class HubRequestHandler(BaseHTTPRequestHandler):
             return
         self.send_error(404, "Not Found")
 
-def run(port=8765):
-    # Remote/LAN exposure is disabled until an authenticated access layer exists.
-    server_address = ("127.0.0.1", port)
+def run(port=8765, host=None):
+    if host is None:
+        host = os.environ.get("HUB_HOST", "0.0.0.0")
+    server_address = (host, port)
     httpd = ThreadingHTTPServer(server_address, HubRequestHandler)
-    print(f"🚀 [Hub Server] Listening locally at http://127.0.0.1:{port}")
-    print("🔒 远程访问已禁用：请勿通过公网隧道暴露此服务。")
+    print(f"🚀 [Hub Server] Listening at http://{host}:{port}")
     try:
         httpd.serve_forever()
     except KeyboardInterrupt:
@@ -549,5 +549,6 @@ def run(port=8765):
         httpd.server_close()
 
 if __name__ == "__main__":
-    port = int(sys.argv[1]) if len(sys.argv) > 1 else 8765
-    run(port)
+    port = int(sys.argv[1]) if len(sys.argv) > 1 else int(os.environ.get("PORT", 8765))
+    host = sys.argv[2] if len(sys.argv) > 2 else os.environ.get("HUB_HOST", "0.0.0.0")
+    run(port, host)
